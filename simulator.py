@@ -3,31 +3,45 @@ import math
 from math import sin,cos
 # 4px = 1cm
 cm = 4
-def is_point_in_rotated_square(point, center, angle, side_length = 10 * cm):
-    # Step 1: Translate point relative to center
+def is_point_in_rotated_square(point, center, angle, side_length=10 * cm): 
     rel_x = point.x - center.x
     rel_y = point.y - center.y
 
-    # Step 2: Unrotate the point
     cos_a = math.cos(-angle)
     sin_a = math.sin(-angle)
     unrotated_x = rel_x * cos_a - rel_y * sin_a
     unrotated_y = rel_x * sin_a + rel_y * cos_a
 
-    # Step 3: Check if inside axis-aligned square
     half_side = side_length / 2
     return (-half_side <= unrotated_x <= half_side) and (-half_side <= unrotated_y <= half_side)
 
+
 def calculate_dat_value(dat_pos, center, angle, step):
+    max_iter = 1000
+    step *= cm
+    point_outside = dat_pos.copy()
     length = 0
-    point = dat_pos.copy()
-    for i in range(1000):
-        point.x -= step * sin(angle) * cm
-        point.y -= step * cos(angle) * cm
-        length += step
-        if is_point_in_rotated_square(point, center, angle):
-            return length
+
+    for _ in range(max_iter):
+        point_outside.x -= step * math.sin(angle)
+        point_outside.y -= step * math.cos(angle)
+        length += abs(step)
+        if is_point_in_rotated_square(point_outside, center, angle):
+            # Binary search to find exact boundary crossing
+            low = (length - abs(step)) / cm
+            high = length / cm
+            for _ in range(10):
+                mid = (low + high) / 2
+                test_point = dat_pos.copy()
+                test_point.x -= mid * math.sin(angle)
+                test_point.y -= mid * math.cos(angle)
+                if is_point_in_rotated_square(test_point, center, angle):
+                    high = mid
+                else:
+                    low = mid
+            return (low + high) / 2
     return None
+
 
 # Pygame setup
 pygame.init()
