@@ -6,14 +6,20 @@ from math import sin, cos
 
 # Constants
 cm = 4  # 4 pixels = 1 cm
-mass_p1 = 10
-mass_p2 = 10
-f_qarsh_1_paym = 10
-f_qarsh_2_paym = 10
-f_glorman_1_paym = 20
-f_glorman_2_paym = 20
-
+mass_p1 = 0.5
+mass_p2 = 0.5
+v1_max = 100 * cm
+v2_max = 100 * cm
+f_qarsh_1_paym = 20
+f_qarsh_2_paym = 20
+f_glorman_1_paym = 2
+f_glorman_2_paym = 2
+f_sahq_paym = 10
+f_aki_deform_paym_1 = 5
+f_aki_deform_paym_2 = 5
 # Initialize forces
+f_aki_deform_1 = 0
+f_aki_deform_2 = 0
 f_qarsh_1 = 0
 f_glorman_1 = 0
 f_hrum = 0
@@ -105,10 +111,8 @@ async def main():
         keys = pygame.key.get_pressed()
         if keys[pygame.K_s]:
             f_qarsh_2 = -f_qarsh_2_paym
-            f_glorman_2 = -f_glorman_2_paym
         elif keys[pygame.K_w]:
             f_qarsh_2 = f_qarsh_2_paym
-            f_glorman_2 = f_glorman_2_paym
         else:
             f_qarsh_2 = 0
             f_glorman_2 = 0
@@ -118,10 +122,8 @@ async def main():
             beta -= 1
         if keys[pygame.K_k]:
             f_qarsh_1 = f_qarsh_1_paym
-            f_glorman_1 = f_glorman_1_paym
         elif keys[pygame.K_i]:
             f_qarsh_1 = -f_qarsh_1_paym
-            f_glorman_1 = -f_glorman_1_paym
         else:
             f_qarsh_1 = 0
             f_glorman_1 = 0
@@ -129,18 +131,74 @@ async def main():
             alfa += 1
         if keys[pygame.K_l]:
             alfa -= 1
+        
+        f_lriv_1_x = 0
+        f_lriv_1_y = 0
+        f_lriv_2_y = 0
+        f_lriv_2_x = 0
+        v1 = pygame.Vector2(v_1_x, v_1_y)
+        v2 = pygame.Vector2(v_2_x, v_2_y)
+        # Robot 1
+        if v1.length() > 0:
+            direction1 = v1.normalize()
+            f_glorman_1_vec = direction1 * f_glorman_1_paym
+            f_aki_deform_1_vec = -direction1 * f_aki_deform_paym_1
+        else:
+            f_glorman_1_vec = pygame.Vector2(0, 0)
+            f_aki_deform_1_vec = pygame.Vector2(0, 0)
 
-        # Calculate forces
-        f_lriv_1_y = (f_glorman_1 + f_qarsh_1) * cos(alfa_r)
-        f_lriv_1_x = (f_glorman_1 + f_qarsh_1) * sin(alfa_r)
-        f_lriv_2_y = (f_glorman_2 + f_qarsh_2) * cos(beta_r)
-        f_lriv_2_x = (f_glorman_2 + f_qarsh_2) * sin(beta_r)
+        # Robot 2
+        if v2.length() > 0:
+            direction2 = v2.normalize()
+            f_glorman_2_vec = direction2 * f_glorman_2_paym
+            f_aki_deform_2_vec = -direction2 * f_aki_deform_paym_2
+        else:
+            f_glorman_2_vec = pygame.Vector2(0, 0)
+            f_aki_deform_2_vec = pygame.Vector2(0, 0)
 
-        # Calculate accelerations (reduced scaling factor for balanced speed)
-        a_1_x = f_lriv_1_x / mass_p1 * 10  # Adjusted from *100 to *10
-        a_1_y = f_lriv_1_y / mass_p1 * 10
-        a_2_x = f_lriv_2_x / mass_p2 * 10
-        a_2_y = f_lriv_2_y / mass_p2 * 10
+        # Local forward force (e.g., "qarsh") — define in local frame and rotate to global
+        f_qarsh_1_local = pygame.Vector2(0, f_qarsh_1) if f_qarsh_1 else pygame.Vector2(0, 0)
+        f_qarsh_2_local = pygame.Vector2(0, f_qarsh_2) if f_qarsh_2 else pygame.Vector2(0, 0)
+
+        f_qarsh_1_vec = f_qarsh_1_local.rotate_rad(-alfa_r)  # rotate forward force to world space
+        f_qarsh_2_vec = f_qarsh_2_local.rotate_rad(-beta_r)
+        # Total force vectors (already in global/world coordinates)
+        # Clamp velocity if exceeding max speed
+        speed1 = math.hypot(v_1_x, v_1_y)
+        
+        try:
+            if speed1 < v1_max:
+                f_total_1 = f_glorman_1_vec + f_qarsh_1_vec + f_aki_deform_1_vec
+            elif f_qarsh_1_vec.normalize() != pygame.Vector2(v_1_x, v_1_y).normalize():
+                f_total_1 = f_glorman_1_vec + f_qarsh_1_vec + f_aki_deform_1_vec
+            else:
+                f_total_1 = pygame.Vector2(0, 0)
+                # Normalize the velocity direction and scale to max
+                direction1 = pygame.Vector2(v_1_x, v_1_y).normalize()
+                v_1_x = direction1.x * v1_max
+                v_1_y = direction1.y * v1_max
+        except:
+            f_total_1 = f_glorman_1_vec + f_qarsh_1_vec + f_aki_deform_1_vec
+        speed2 = math.hypot(v_2_x, v_2_y)
+        if speed2 < v2_max:
+            f_total_2 = f_glorman_2_vec + f_qarsh_2_vec + f_aki_deform_2_vec
+        else:
+            f_total_2 = pygame.Vector2(0, 0)
+            direction2 = pygame.Vector2(v_2_x, v_2_y).normalize()
+            v_2_x = direction2.x * v2_max
+            v_2_y = direction2.y * v2_max
+        
+        # Extract components
+        f_lriv_1_x = f_total_1.x
+        f_lriv_1_y = f_total_1.y
+        f_lriv_2_x = f_total_2.x
+        f_lriv_2_y = f_total_2.y
+
+        # Calculate accelerations
+        a_1_x = f_lriv_1_x / mass_p1 * 100 * cm
+        a_1_y = f_lriv_1_y / mass_p1 * 100 * cm
+        a_2_x = f_lriv_2_x / mass_p2 * 100 * cm
+        a_2_y = f_lriv_2_y / mass_p2 * 100 * cm
 
         # Update velocities
         v_1_x += a_1_x * dt
@@ -148,6 +206,17 @@ async def main():
         v_2_x += a_2_x * dt
         v_2_y += a_2_y * dt
 
+        ## Clamp updated velocities again to max speed
+        #v1 = pygame.Vector2(v_1_x, v_1_y)
+        #if v1.length() > v1_max and (a_1_x * v_1_x >= 0 or a_1_y / v_1_y >= 0):
+        #    v1 = v1.normalize() * v1_max
+        #    v_1_x, v_1_y = v1.x, v1.y
+#
+        #v2 = pygame.Vector2(v_2_x, v_2_y)
+        #if v2.length() > v2_max:
+        #    v2 = v2.normalize() * v2_max
+        #    v_2_x, v_2_y = v2.x, v2.y
+#
         # Update positions
         player1_pos.x += v_1_x * dt
         player1_pos.y += v_1_y * dt
@@ -221,7 +290,7 @@ async def main():
         p2_mask = pygame.mask.from_surface(p2_rotated)
         offset = (p2_rect.left - p1_rect.left, p2_rect.top - p1_rect.top)
         if p1_mask.overlap(p2_mask, offset):
-            damping = 0.8
+            damping = 0.1
             v_1_x *= -damping
             v_1_y *= -damping
             v_2_x *= -damping
@@ -299,7 +368,6 @@ async def main():
     print(f"P2 dat3 : {p2_dat3_value}")
     print(f"P2 dat4 : {p2_dat4_value}")
     print(f"P2 dat5 : {p2_dat5_value}")
-    print(f_lriv_1_ys)
 
 if platform.system() == "Emscripten":
     asyncio.ensure_future(main())
