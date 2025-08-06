@@ -8,8 +8,8 @@ from math import sin, cos
 cm = 4  # 4 pixels = 1 cm
 mass_p1 = 0.5
 mass_p2 = 0.5
-v1_max = 100 * cm
-v2_max = 100 * cm
+v1_max = 10 * cm
+v2_max = 10 * cm
 f_qarsh_1_paym = 20
 f_qarsh_2_paym = 20
 f_glorman_1_paym = 2
@@ -26,6 +26,11 @@ f_hrum = 0
 alfa_hrum = 0
 f_qarsh_2 = 0
 f_glorman_2 = 0
+f_aki_deform_1s = []
+f_glorman_1s = []
+f_qarsh_1s = []
+v_1_xs = []
+v_1_ys = []
 
 def is_point_in_rotated_square(point, center, angle, side_length=10 * cm):
     rel_x = point.x - center.x
@@ -93,6 +98,9 @@ p2_dat3_value = []
 p2_dat4_value = []
 p2_dat5_value = []
 f_lriv_1_ys = []
+a_1_xs = []
+a_1_ys = []
+f_tot = []
 
 async def main():
     global alfa, beta, f_qarsh_1, f_glorman_1, f_qarsh_2, f_glorman_2
@@ -166,10 +174,10 @@ async def main():
         # Clamp velocity if exceeding max speed
         speed1 = math.hypot(v_1_x, v_1_y)
         
-        try:
-            if speed1 < v1_max:
+        if f_qarsh_1_vec.length() != 0:
+            if speed1 <= v1_max:
                 f_total_1 = f_glorman_1_vec + f_qarsh_1_vec + f_aki_deform_1_vec
-            elif f_qarsh_1_vec.normalize() != pygame.Vector2(v_1_x, v_1_y).normalize():
+            elif f_qarsh_1_vec.normalize() == -pygame.Vector2(v_1_x, v_1_y).normalize():
                 f_total_1 = f_glorman_1_vec + f_qarsh_1_vec + f_aki_deform_1_vec
             else:
                 f_total_1 = pygame.Vector2(0, 0)
@@ -177,46 +185,82 @@ async def main():
                 direction1 = pygame.Vector2(v_1_x, v_1_y).normalize()
                 v_1_x = direction1.x * v1_max
                 v_1_y = direction1.y * v1_max
-        except:
-            f_total_1 = f_glorman_1_vec + f_qarsh_1_vec + f_aki_deform_1_vec
-        speed2 = math.hypot(v_2_x, v_2_y)
-        if speed2 < v2_max:
-            f_total_2 = f_glorman_2_vec + f_qarsh_2_vec + f_aki_deform_2_vec
+
+            f_lriv_1_x = f_total_1.x
+            f_lriv_1_y = f_total_1.y
+
+            # Aragacum
+            a_1_x = f_lriv_1_x / mass_p1 * 100 * cm
+            a_1_y = f_lriv_1_y / mass_p1 * 100 * cm
+            
+            # Aragutyun
+            v_1_x += a_1_x * dt
+            v_1_y += a_1_y * dt
         else:
-            f_total_2 = pygame.Vector2(0, 0)
-            direction2 = pygame.Vector2(v_2_x, v_2_y).normalize()
-            v_2_x = direction2.x * v2_max
-            v_2_y = direction2.y * v2_max
+            f_total_1 = f_glorman_1_vec + f_aki_deform_1_vec
+
+            f_lriv_1_x = f_total_1.x
+            f_lriv_1_y = f_total_1.y
+
+            # Aragacum
+            a_1_x = f_lriv_1_x / mass_p1 * 100 * cm
+            a_1_y = f_lriv_1_y / mass_p1 * 100 * cm
+            
+            # Aragutyun
+            if v_1_x * (v_1_x + a_1_x * dt) >= 0:
+                v_1_x += a_1_x * dt 
+            else:
+                v_1_x = 0
+            if v_1_y * (v_1_y + a_1_y * dt) >= 0:
+                v_1_y += a_1_y * dt 
+            else:
+                v_1_y = 0
         
-        # Extract components
-        f_lriv_1_x = f_total_1.x
-        f_lriv_1_y = f_total_1.y
-        f_lriv_2_x = f_total_2.x
-        f_lriv_2_y = f_total_2.y
+        speed2 = math.hypot(v_2_x, v_2_y)
+        
+        if f_qarsh_2_vec.length() != 0:
+            if speed2 <= v2_max:
+                f_total_2 = f_glorman_2_vec + f_qarsh_2_vec + f_aki_deform_2_vec
+            elif f_qarsh_2_vec.normalize() == -pygame.Vector2(v_2_x, v_2_y).normalize():
+                f_total_2 = f_glorman_2_vec + f_qarsh_2_vec + f_aki_deform_2_vec
+            else:
+                f_total_2 = pygame.Vector2(0, 0)
+                # Normalize the velocity direction and scale to max
+                direction2 = pygame.Vector2(v_2_x, v_2_y).normalize()
+                v_2_x = direction2.x * v2_max
+                v_2_y = direction2.y * v2_max
 
-        # Calculate accelerations
-        a_1_x = f_lriv_1_x / mass_p1 * 100 * cm
-        a_1_y = f_lriv_1_y / mass_p1 * 100 * cm
-        a_2_x = f_lriv_2_x / mass_p2 * 100 * cm
-        a_2_y = f_lriv_2_y / mass_p2 * 100 * cm
+            f_lriv_2_x = f_total_2.x
+            f_lriv_2_y = f_total_2.y
 
-        # Update velocities
-        v_1_x += a_1_x * dt
-        v_1_y += a_1_y * dt
-        v_2_x += a_2_x * dt
-        v_2_y += a_2_y * dt
+            # Aragacum
+            a_2_x = f_lriv_2_x / mass_p2 * 100 * cm
+            a_2_y = f_lriv_2_y / mass_p2 * 100 * cm
 
-        ## Clamp updated velocities again to max speed
-        #v1 = pygame.Vector2(v_1_x, v_1_y)
-        #if v1.length() > v1_max and (a_1_x * v_1_x >= 0 or a_1_y / v_1_y >= 0):
-        #    v1 = v1.normalize() * v1_max
-        #    v_1_x, v_1_y = v1.x, v1.y
-#
-        #v2 = pygame.Vector2(v_2_x, v_2_y)
-        #if v2.length() > v2_max:
-        #    v2 = v2.normalize() * v2_max
-        #    v_2_x, v_2_y = v2.x, v2.y
-#
+            # Aragutyun
+            v_2_x += a_2_x * dt
+            v_2_y += a_2_y * dt
+        else:
+            f_total_2 = f_glorman_2_vec + f_aki_deform_2_vec
+
+            f_lriv_2_x = f_total_2.x
+            f_lriv_2_y = f_total_2.y
+
+            # Aragacum
+            a_2_x = f_lriv_2_x / mass_p2 * 100 * cm
+            a_2_y = f_lriv_2_y / mass_p2 * 100 * cm
+
+            # Aragutyun
+            if v_2_x * (v_2_x + a_2_x * dt) >= 0:
+                v_2_x += a_2_x * dt 
+            else:
+                v_2_x = 0
+            if v_2_y * (v_2_y + a_2_y * dt) >= 0:
+                v_2_y += a_2_y * dt 
+            else:
+                v_2_y = 0
+
+
         # Update positions
         player1_pos.x += v_1_x * dt
         player1_pos.y += v_1_y * dt
@@ -322,6 +366,14 @@ async def main():
         current_time = pygame.time.get_ticks()
         elapsed = current_time - start_time
         if elapsed > 100:
+            f_qarsh_1s.append(f_qarsh_1_vec.length())
+            f_glorman_1s.append(f_glorman_1_vec.length())
+            f_aki_deform_1s.append(f_aki_deform_1_vec.length())
+            v_1_xs.append(v_1_x)
+            v_1_ys.append(v_1_y)
+            a_1_xs.append(a_1_x)
+            a_1_ys.append(a_1_y)
+            f_tot.append(f_total_1.length())
             val = calculate_dat_value(p1_dat1, player2_pos, alfa_r, 1)
             if val:
                 p1_dat1_value.append(val)
@@ -368,7 +420,14 @@ async def main():
     print(f"P2 dat3 : {p2_dat3_value}")
     print(f"P2 dat4 : {p2_dat4_value}")
     print(f"P2 dat5 : {p2_dat5_value}")
-
+    # print(f"f_qarsh_1 : {f_qarsh_1s}")
+    # print(f"f_glorman_1 : {f_glorman_1s}")
+    # print(f"f_aki_deform_1 : {f_aki_deform_1s}")
+    # print(f"v_1_x : {v_1_xs}")
+    # print(f"v_1_y : {v_1_ys}")
+    # print(f"a_1_x : {a_1_xs}")
+    # print(f"a_1_y : {a_1_ys}")
+    # print(f"total force : {f_tot}")
 if platform.system() == "Emscripten":
     asyncio.ensure_future(main())
 else:
