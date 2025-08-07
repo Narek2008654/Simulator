@@ -179,12 +179,16 @@ async def main():
                 f_total_1 = f_glorman_1_vec + f_qarsh_1_vec + f_aki_deform_1_vec
             elif f_qarsh_1_vec.normalize() == -pygame.Vector2(v_1_x, v_1_y).normalize():
                 f_total_1 = f_glorman_1_vec + f_qarsh_1_vec + f_aki_deform_1_vec
+                v_1_xs.append(v_1_x)
+                v_1_ys.append(v_1_y)
             else:
                 f_total_1 = pygame.Vector2(0, 0)
                 # Normalize the velocity direction and scale to max
                 direction1 = pygame.Vector2(v_1_x, v_1_y).normalize()
                 v_1_x = direction1.x * v1_max
                 v_1_y = direction1.y * v1_max
+                v_1_xs.append(v_1_x)
+                v_1_ys.append(v_1_y)
 
             f_lriv_1_x = f_total_1.x
             f_lriv_1_y = f_total_1.y
@@ -193,6 +197,7 @@ async def main():
             a_1_x = f_lriv_1_x / mass_p1 * 100 * cm
             a_1_y = f_lriv_1_y / mass_p1 * 100 * cm
             
+
             # Aragutyun
             v_1_x += a_1_x * dt
             v_1_y += a_1_y * dt
@@ -369,10 +374,10 @@ async def main():
             f_qarsh_1s.append(f_qarsh_1_vec.length())
             f_glorman_1s.append(f_glorman_1_vec.length())
             f_aki_deform_1s.append(f_aki_deform_1_vec.length())
-            v_1_xs.append(v_1_x)
-            v_1_ys.append(v_1_y)
-            a_1_xs.append(a_1_x)
-            a_1_ys.append(a_1_y)
+            #v_1_xs.append(v_1_x)
+            #v_1_ys.append(v_1_y)
+            
+            
             f_tot.append(f_total_1.length())
             val = calculate_dat_value(p1_dat1, player2_pos, alfa_r, 1)
             if val:
@@ -409,22 +414,22 @@ async def main():
         pygame.display.flip()
         await asyncio.sleep(1.0 / FPS)
 
-    print(f"Score {score[0]} : {score[1]}")
-    print(f"P1 dat1 : {p1_dat1_value}")
-    print(f"P1 dat2 : {p1_dat2_value}")
-    print(f"P1 dat3 : {p1_dat3_value}")
-    print(f"P1 dat4 : {p1_dat4_value}")
-    print(f"P1 dat5 : {p1_dat5_value}")
-    print(f"P2 dat1 : {p2_dat1_value}")
-    print(f"P2 dat2 : {p2_dat2_value}")
-    print(f"P2 dat3 : {p2_dat3_value}")
-    print(f"P2 dat4 : {p2_dat4_value}")
-    print(f"P2 dat5 : {p2_dat5_value}")
+    #print(f"Score {score[0]} : {score[1]}")
+    #print(f"P1 dat1 : {p1_dat1_value}")
+    #print(f"P1 dat2 : {p1_dat2_value}")
+    #print(f"P1 dat3 : {p1_dat3_value}")
+    #print(f"P1 dat4 : {p1_dat4_value}")
+    #print(f"P1 dat5 : {p1_dat5_value}")
+    #print(f"P2 dat1 : {p2_dat1_value}")
+    #print(f"P2 dat2 : {p2_dat2_value}")
+    #print(f"P2 dat3 : {p2_dat3_value}")
+    #print(f"P2 dat4 : {p2_dat4_value}")
+    #print(f"P2 dat5 : {p2_dat5_value}")
     # print(f"f_qarsh_1 : {f_qarsh_1s}")
     # print(f"f_glorman_1 : {f_glorman_1s}")
     # print(f"f_aki_deform_1 : {f_aki_deform_1s}")
-    # print(f"v_1_x : {v_1_xs}")
-    # print(f"v_1_y : {v_1_ys}")
+    print(f"v_1_x : {v_1_xs}")
+    print(f"v_1_y : {v_1_ys}")
     # print(f"a_1_x : {a_1_xs}")
     # print(f"a_1_y : {a_1_ys}")
     # print(f"total force : {f_tot}")
