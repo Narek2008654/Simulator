@@ -8,8 +8,8 @@ from math import sin, cos
 cm = 4  # 4 pixels = 1 cm
 mass_p1 = 0.5
 mass_p2 = 0.5
-v1_max = 10 * cm
-v2_max = 10 * cm
+v1_max = 100 * cm
+v2_max = 100 * cm
 f_qarsh_1_paym = 20
 f_qarsh_2_paym = 20
 f_glorman_1_paym = 2
@@ -244,6 +244,7 @@ async def main():
         a_1_x, a_1_y = a1_vec.x, a1_vec.y
         a_2_x, a_2_y = a2_vec.x, a2_vec.y
         # --- end physics update ---
+        
 
         # Datchikner (sensors)
         p1_dat2 = player1_pos.copy()
@@ -280,7 +281,7 @@ async def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
+        
         # Drawing
         screen.fill("white")
         pygame.draw.circle(screen, "yellow", center, 100 * cm)
@@ -308,15 +309,88 @@ async def main():
         screen.blit(p2_rotated, p2_rect)
 
         # Collision detection with bounce
+        # --- Collision detection & impulse resolution (replace your simple bounce block) ---
         p1_mask = pygame.mask.from_surface(p1_rotated)
         p2_mask = pygame.mask.from_surface(p2_rotated)
         offset = (p2_rect.left - p1_rect.left, p2_rect.top - p1_rect.top)
-        if p1_mask.overlap(p2_mask, offset):
-            damping = 0.1
-            v_1_x *= -damping
-            v_1_y *= -damping
-            v_2_x *= -damping
-            v_2_y *= -damping
+        overlap_point = p1_mask.overlap(p2_mask, offset)  # returns local coords in p1_mask or None
+
+        if overlap_point:
+            # Tuning params
+            restitution = 0.3       # bounciness: 0.0 = inelastic, 1.0 = fully elastic (tweak)
+            positional_percent = 0.2  # percent of penetration to correct (0.2 is typical)
+            slop = 0.5               # penetration allowance in pixels (avoid jitter)
+            eps = 1e-8
+
+            # Compute world-space contact point (approx)
+            # overlap_point is in p1_mask local coords (x,y) relative to p1_rect.topleft
+            contact_world = pygame.Vector2(p1_rect.left + overlap_point[0], p1_rect.top + overlap_point[1])
+
+            # Compute collision normal: prefer center-to-center as stable approximation
+            center_vec = pygame.Vector2(player2_pos.x - player1_pos.x, player2_pos.y - player1_pos.y)
+            dist_centers = center_vec.length()
+            if dist_centers > eps:
+                normal = center_vec.normalize()
+            else:
+                # fallback: try using difference of rotations (rare)
+                ang_diff = math.radians(beta - alfa)
+                normal = pygame.Vector2(math.sin(ang_diff), math.cos(ang_diff))
+                if normal.length() < eps:
+                    normal = pygame.Vector2(0, -1)  # ultimate fallback
+
+            # Relative velocity at centers (you don't model angular velocity)
+            v1 = pygame.Vector2(v_1_x, v_1_y)
+            v2 = pygame.Vector2(v_2_x, v_2_y)
+            rel_vel = v2 - v1
+
+            # Velocity along normal
+            vel_along_normal = rel_vel.dot(normal)
+
+            # If velocities are separating, do nothing
+            if vel_along_normal < 0:
+                inv_m1 = 1.0 / mass_p1 if mass_p1 > eps else 0.0
+                inv_m2 = 1.0 / mass_p2 if mass_p2 > eps else 0.0
+
+                # impulse scalar (1D collision along normal)
+                j = -(1 + restitution) * vel_along_normal
+                denom = inv_m1 + inv_m2
+                if denom > eps:
+                    j /= denom
+
+                    impulse = normal * j
+
+                    # apply impulses (change linear velocities)
+                    v_1_x -= (impulse.x * inv_m1)
+                    v_1_y -= (impulse.y * inv_m1)
+                    v_2_x += (impulse.x * inv_m2)
+                    v_2_y += (impulse.y * inv_m2)
+
+            # Positional correction to avoid sinking/overlap:
+            # approximate penetration using square-to-circle conservative radii (robots are 10*cm squares)
+            side = 10 * cm
+            # radius of circumscribed circle for square: half-diagonal = side / sqrt(2)
+            r = side / (2 ** 0.5)
+            sum_r = r + r
+            # distance between centers (recompute robustly)
+            dist = player1_pos.distance_to(player2_pos)
+            penetration = max(0.0, sum_r - dist)
+
+            if penetration > slop and (inv_m1 + inv_m2) > eps:
+                correction_magnitude = (max(penetration - slop, 0.0) / (inv_m1 + inv_m2)) * positional_percent
+                correction = normal * correction_magnitude
+                # move objects apart proportionally to their inverse masses
+                player1_pos -= correction * inv_m1
+                player2_pos += correction * inv_m2
+
+            # Optional: reduce velocities a bit to simulate energy loss / friction on contact
+            contact_damping = 0.98
+            v_1_x *= contact_damping
+            v_1_y *= contact_damping
+            v_2_x *= contact_damping
+            v_2_y *= contact_damping
+
+            # (Optional) You can show the contact point for debugging:
+            # pygame.draw.circle(screen, "blue", contact_world, 3)
 
         # Scoring
         dist_p1 = player1_pos.distance_to(center)
