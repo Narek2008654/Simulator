@@ -31,6 +31,57 @@ f_glorman_1s = []
 f_qarsh_1s = []
 v_1_xs = []
 v_1_ys = []
+eps = 1e-8
+# --- constants & helpers ---
+cm_factor = 100 * cm  # keep your original acceleration scaling
+# --- helper to update each robot with the braking rule you requested ---
+def update_robot_with_brake(vx, vy,
+                            f_forward_vec,
+                            f_glorman_paym, f_aki_deform_paym,
+                            mass, v_max, dt):
+    v = pygame.Vector2(vx, vy)
+    # If forward force is present: opposing forces both oppose velocity as usual
+    if f_forward_vec.length() > eps:
+        f_glorman_vec = -v.normalize() * f_glorman_paym if v.length() > eps else pygame.Vector2(0, 0)
+        f_aki_deform_vec = -v.normalize() * f_aki_deform_paym if v.length() > eps else pygame.Vector2(0,0)
+        f_total = f_forward_vec + f_glorman_vec + f_aki_deform_vec
+    else:
+        # NO forward force: braking comes from (aki - glorman), not allowing negative braking
+        brake_mag = max(f_aki_deform_paym - f_glorman_paym, 0.0)
+        if v.length() > eps and brake_mag > 0.0:
+            # apply braking opposite current motion
+            f_brake = -v.normalize() * brake_mag
+            f_total = f_brake
+        else:
+            # either already stopped or no net brake -> no force
+            f_total = pygame.Vector2(0, 0)
+    # compute acceleration using your original scaling
+    a = pygame.Vector2(f_total.x / mass * cm_factor, f_total.y / mass * cm_factor)
+    # semi-implicit Euler: update velocity
+    v_next = v + a * dt
+    # Guarantee we never reverse direction due to braking:
+    # If current speed > 0 and dot(v, v_next) <= 0 then we've reached/passed zero -> snap to zero
+    if v.length() > eps and v.dot(v_next) <= 0:
+        v_next = pygame.Vector2(0, 0)
+    # small-stop threshold to avoid jitter at extremely low speeds
+    small_vel_threshold = 1e-3
+    if v_next.length() < small_vel_threshold:
+        v_next = pygame.Vector2(0, 0)
+    # clamp magnitude WITHOUT changing direction
+    speed_next = v_next.length()
+    if speed_next > v_max and speed_next > eps:
+        v_next.scale_to_length(v_max)
+    return v_next, a, f_total
+
+# compute the passive opposing forces magnitudes (paym values are scalars)
+# note: these are used to form world-space vectors opposite the velocity when needed
+def opposing_vector_from_mags(vel_vec, mag_glorman, mag_aki):
+    # When forward force is absent we want braking = max(aki - glorman, 0)
+    if vel_vec.length() <= eps:
+        return pygame.Vector2(0, 0)
+    dir_neg = -vel_vec.normalize()
+    # default opposing components when forward present are both opposing vel
+    return dir_neg * (mag_glorman + mag_aki)  # used when forward present
 
 def is_point_in_rotated_square(point, center, angle, side_length=10 * cm):
     rel_x = point.x - center.x
@@ -107,170 +158,92 @@ async def main():
     global v_1_x, v_1_y, v_2_x, v_2_y, player1_pos, player2_pos, start_time
     running = True
     while running:
-        dt = clock.tick(FPS) / 1000.0  # Time delta in seconds
+        # --- physics update (replace your existing block with this) ---
+        dt = clock.tick(FPS) / 1000.0  # seconds
         ex_player1_pos = player1_pos.copy()
         ex_player2_pos = player2_pos.copy()
         ex_alfa = alfa
         ex_beta = beta
+
+        # convert degrees to radians once (used for force rotation)
         alfa_r = math.radians(alfa)
         beta_r = math.radians(beta)
 
-        # Handle input
+        # --- input (turn smoothing) ---
+        turn_rate = 180.0  # degrees/sec, tweak to taste
         keys = pygame.key.get_pressed()
+
+        # player2 forward/back
         if keys[pygame.K_s]:
             f_qarsh_2 = -f_qarsh_2_paym
         elif keys[pygame.K_w]:
             f_qarsh_2 = f_qarsh_2_paym
         else:
             f_qarsh_2 = 0
-            f_glorman_2 = 0
+
+        # player2 rotation (smoothed)
+        d_beta = 0.0
         if keys[pygame.K_a]:
-            beta += 1
+            d_beta += 1.0
         if keys[pygame.K_d]:
-            beta -= 1
+            d_beta -= 1.0
+        beta += d_beta * turn_rate * dt
+
+        # player1 forward/back
         if keys[pygame.K_k]:
             f_qarsh_1 = f_qarsh_1_paym
         elif keys[pygame.K_i]:
             f_qarsh_1 = -f_qarsh_1_paym
         else:
             f_qarsh_1 = 0
-            f_glorman_1 = 0
+
+        # player1 rotation (smoothed)
+        d_alfa = 0.0
         if keys[pygame.K_j]:
-            alfa += 1
+            d_alfa += 1.0
         if keys[pygame.K_l]:
-            alfa -= 1
-        
-        f_lriv_1_x = 0
-        f_lriv_1_y = 0
-        f_lriv_2_y = 0
-        f_lriv_2_x = 0
+            d_alfa -= 1.0
+        alfa += d_alfa * turn_rate * dt
+
         v1 = pygame.Vector2(v_1_x, v_1_y)
         v2 = pygame.Vector2(v_2_x, v_2_y)
-        # Robot 1
-        if v1.length() > 0:
-            direction1 = v1.normalize()
-            f_glorman_1_vec = direction1 * f_glorman_1_paym
-            f_aki_deform_1_vec = -direction1 * f_aki_deform_paym_1
-        else:
-            f_glorman_1_vec = pygame.Vector2(0, 0)
-            f_aki_deform_1_vec = pygame.Vector2(0, 0)
 
-        # Robot 2
-        if v2.length() > 0:
-            direction2 = v2.normalize()
-            f_glorman_2_vec = direction2 * f_glorman_2_paym
-            f_aki_deform_2_vec = -direction2 * f_aki_deform_paym_2
-        else:
-            f_glorman_2_vec = pygame.Vector2(0, 0)
-            f_aki_deform_2_vec = pygame.Vector2(0, 0)
-
-        # Local forward force (e.g., "qarsh") — define in local frame and rotate to global
-        f_qarsh_1_local = pygame.Vector2(0, f_qarsh_1) if f_qarsh_1 else pygame.Vector2(0, 0)
-        f_qarsh_2_local = pygame.Vector2(0, f_qarsh_2) if f_qarsh_2 else pygame.Vector2(0, 0)
-
-        f_qarsh_1_vec = f_qarsh_1_local.rotate_rad(-alfa_r)  # rotate forward force to world space
+        # --- forward forces in local space rotated to world ---
+        f_qarsh_1_local = pygame.Vector2(0, f_qarsh_1) if abs(f_qarsh_1) > 0 else pygame.Vector2(0, 0)
+        f_qarsh_2_local = pygame.Vector2(0, f_qarsh_2) if abs(f_qarsh_2) > 0 else pygame.Vector2(0, 0)
+        f_qarsh_1_vec = f_qarsh_1_local.rotate_rad(-alfa_r)
         f_qarsh_2_vec = f_qarsh_2_local.rotate_rad(-beta_r)
-        # Total force vectors (already in global/world coordinates)
-        # Clamp velocity if exceeding max speed
-        speed1 = math.hypot(v_1_x, v_1_y)
-        
-        if f_qarsh_1_vec.length() != 0:
-            if speed1 <= v1_max:
-                f_total_1 = f_glorman_1_vec + f_qarsh_1_vec + f_aki_deform_1_vec
-            elif f_qarsh_1_vec.normalize() == -pygame.Vector2(v_1_x, v_1_y).normalize():
-                f_total_1 = f_glorman_1_vec + f_qarsh_1_vec + f_aki_deform_1_vec
-                v_1_xs.append(v_1_x)
-                v_1_ys.append(v_1_y)
-            else:
-                f_total_1 = pygame.Vector2(0, 0)
-                # Normalize the velocity direction and scale to max
-                direction1 = pygame.Vector2(v_1_x, v_1_y).normalize()
-                v_1_x = direction1.x * v1_max
-                v_1_y = direction1.y * v1_max
-                v_1_xs.append(v_1_x)
-                v_1_ys.append(v_1_y)
 
-            f_lriv_1_x = f_total_1.x
-            f_lriv_1_y = f_total_1.y
+        # --- update robot 1 ---
+        v1_new, a1_vec, f_total_1 = update_robot_with_brake(
+            v_1_x, v_1_y, f_qarsh_1_vec,
+            f_glorman_1_paym, f_aki_deform_paym_1,
+            mass_p1, v1_max, dt
+        )
+        v_1_x, v_1_y = v1_new.x, v1_new.y
 
-            # Aragacum
-            a_1_x = f_lriv_1_x / mass_p1 * 100 * cm
-            a_1_y = f_lriv_1_y / mass_p1 * 100 * cm
-            
+        # --- update robot 2 ---
+        v2_new, a2_vec, f_total_2 = update_robot_with_brake(
+            v_2_x, v_2_y, f_qarsh_2_vec,
+            f_glorman_2_paym, f_aki_deform_paym_2,
+            mass_p2, v2_max, dt
+        )
+        v_2_x, v_2_y = v2_new.x, v2_new.y
 
-            # Aragutyun
-            v_1_x += a_1_x * dt
-            v_1_y += a_1_y * dt
-        else:
-            f_total_1 = f_glorman_1_vec + f_aki_deform_1_vec
-
-            f_lriv_1_x = f_total_1.x
-            f_lriv_1_y = f_total_1.y
-
-            # Aragacum
-            a_1_x = f_lriv_1_x / mass_p1 * 100 * cm
-            a_1_y = f_lriv_1_y / mass_p1 * 100 * cm
-            
-            # Aragutyun
-            if v_1_x * (v_1_x + a_1_x * dt) >= 0:
-                v_1_x += a_1_x * dt 
-            else:
-                v_1_x = 0
-            if v_1_y * (v_1_y + a_1_y * dt) >= 0:
-                v_1_y += a_1_y * dt 
-            else:
-                v_1_y = 0
-        
-        speed2 = math.hypot(v_2_x, v_2_y)
-        
-        if f_qarsh_2_vec.length() != 0:
-            if speed2 <= v2_max:
-                f_total_2 = f_glorman_2_vec + f_qarsh_2_vec + f_aki_deform_2_vec
-            elif f_qarsh_2_vec.normalize() == -pygame.Vector2(v_2_x, v_2_y).normalize():
-                f_total_2 = f_glorman_2_vec + f_qarsh_2_vec + f_aki_deform_2_vec
-            else:
-                f_total_2 = pygame.Vector2(0, 0)
-                # Normalize the velocity direction and scale to max
-                direction2 = pygame.Vector2(v_2_x, v_2_y).normalize()
-                v_2_x = direction2.x * v2_max
-                v_2_y = direction2.y * v2_max
-
-            f_lriv_2_x = f_total_2.x
-            f_lriv_2_y = f_total_2.y
-
-            # Aragacum
-            a_2_x = f_lriv_2_x / mass_p2 * 100 * cm
-            a_2_y = f_lriv_2_y / mass_p2 * 100 * cm
-
-            # Aragutyun
-            v_2_x += a_2_x * dt
-            v_2_y += a_2_y * dt
-        else:
-            f_total_2 = f_glorman_2_vec + f_aki_deform_2_vec
-
-            f_lriv_2_x = f_total_2.x
-            f_lriv_2_y = f_total_2.y
-
-            # Aragacum
-            a_2_x = f_lriv_2_x / mass_p2 * 100 * cm
-            a_2_y = f_lriv_2_y / mass_p2 * 100 * cm
-
-            # Aragutyun
-            if v_2_x * (v_2_x + a_2_x * dt) >= 0:
-                v_2_x += a_2_x * dt 
-            else:
-                v_2_x = 0
-            if v_2_y * (v_2_y + a_2_y * dt) >= 0:
-                v_2_y += a_2_y * dt 
-            else:
-                v_2_y = 0
-
-
-        # Update positions
+        # update positions (semi-implicit Euler)
         player1_pos.x += v_1_x * dt
         player1_pos.y += v_1_y * dt
         player2_pos.x += v_2_x * dt
         player2_pos.y += v_2_y * dt
+
+        # keep these if other code expects them
+        f_lriv_1_x = f_total_1.x
+        f_lriv_1_y = f_total_1.y
+        f_lriv_2_x = f_total_2.x
+        f_lriv_2_y = f_total_2.y
+        a_1_x, a_1_y = a1_vec.x, a1_vec.y
+        a_2_x, a_2_y = a2_vec.x, a2_vec.y
+        # --- end physics update ---
 
         # Datchikner (sensors)
         p1_dat2 = player1_pos.copy()
@@ -371,9 +344,9 @@ async def main():
         current_time = pygame.time.get_ticks()
         elapsed = current_time - start_time
         if elapsed > 100:
-            f_qarsh_1s.append(f_qarsh_1_vec.length())
-            f_glorman_1s.append(f_glorman_1_vec.length())
-            f_aki_deform_1s.append(f_aki_deform_1_vec.length())
+            #f_qarsh_1s.append(f_qarsh_1_vec.length())
+            #f_glorman_1s.append(f_glorman_1_vec.length())
+            #f_aki_deform_1s.append(f_aki_deform_1_vec.length())
             #v_1_xs.append(v_1_x)
             #v_1_ys.append(v_1_y)
             
@@ -428,8 +401,8 @@ async def main():
     # print(f"f_qarsh_1 : {f_qarsh_1s}")
     # print(f"f_glorman_1 : {f_glorman_1s}")
     # print(f"f_aki_deform_1 : {f_aki_deform_1s}")
-    print(f"v_1_x : {v_1_xs}")
-    print(f"v_1_y : {v_1_ys}")
+    # print(f"v_1_x : {v_1_xs}")
+    # print(f"v_1_y : {v_1_ys}")
     # print(f"a_1_x : {a_1_xs}")
     # print(f"a_1_y : {a_1_ys}")
     # print(f"total force : {f_tot}")
