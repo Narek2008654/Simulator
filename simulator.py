@@ -3,7 +3,9 @@ import platform
 import pygame
 import math
 from math import sin, cos
-
+from datetime import datetime
+import numpy as np
+import os
 # Constants
 cm = 4  # 4 pixels = 1 cm
 mass_p1 = 0.5
@@ -31,6 +33,8 @@ f_glorman_1s = []
 f_qarsh_1s = []
 v_1_xs = []
 v_1_ys = []
+klavish_1 = []
+klavish_2 = []
 eps = 1e-8
 # --- constants & helpers ---
 cm_factor = 100 * cm  # keep your original acceleration scaling
@@ -94,7 +98,7 @@ def is_point_in_rotated_square(point, center, angle, side_length=10 * cm):
     return (-half_side <= unrotated_x <= half_side) and (-half_side <= unrotated_y <= half_side)
 
 def calculate_dat_value(dat_pos, center, angle, step):
-    max_iter = 1000
+    max_iter = 40
     step *= cm
     point_outside = dat_pos.copy()
     length = 0
@@ -115,8 +119,77 @@ def calculate_dat_value(dat_pos, center, angle, step):
                 else:
                     low = mid
             return (low + high) / 2
-    return None
+    return max_iter
+def save(p1_dat1_value = None,
+        p1_dat2_value = None,
+        p1_dat3_value = None,
+        p1_dat4_value = None,
+        p1_dat5_value = None,
+        p2_dat1_value = None,
+        p2_dat2_value = None,
+        p2_dat3_value = None,
+        p2_dat4_value = None,
+        p2_dat5_value = None, 
+        klavish_1 = None,
+        klavish_2 = None,
+        winner = None):
+    original_dir = os.getcwd()  # Save current directory
+    save_dir = str(winner)
+    os.makedirs(save_dir, exist_ok=True)  # Create winner directory if it doesn't exist
+    os.chdir(save_dir)
+    current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
+    p1_dat1_value = np.array(p1_dat1_value)
+    p1_dat2_value = np.array(p1_dat2_value)
+    p1_dat3_value = np.array(p1_dat3_value)
+    p1_dat4_value = np.array(p1_dat4_value)
+    p1_dat5_value = np.array(p1_dat5_value)
 
+    p2_dat1_value = np.array(p2_dat1_value)
+    p2_dat2_value = np.array(p2_dat2_value)
+    p2_dat3_value = np.array(p2_dat3_value)
+    p2_dat4_value = np.array(p2_dat4_value)
+    p2_dat5_value = np.array(p2_dat5_value)
+
+    klavish_1 = np.array(klavish_1)
+    klavish_2 = np.array(klavish_2)
+    np.savez(
+        f"{winner}_{current_datetime}.npz",
+        **{
+            "P1_dat1": p1_dat1_value,
+            "P1_dat2": p1_dat2_value,
+            "P1_dat3": p1_dat3_value,
+            "P1_dat4": p1_dat4_value,
+            "P1_dat5": p1_dat5_value,
+            "P2_dat1": p2_dat1_value,
+            "P2_dat2": p2_dat2_value,
+            "P2_dat3": p2_dat3_value,
+            "P2_dat4": p2_dat4_value,
+            "P2_dat5": p2_dat5_value,
+            "Klavish_1": klavish_1,
+            "Klavish_2": klavish_2,
+        }
+    )
+    os.chdir(original_dir)
+def convert(move_x, move_y):
+    if move_x == -1 and move_y == 1:
+        vec = [0, 1]
+    elif move_x == 1 and move_y == 1:
+        vec = [1, 0]
+    elif move_x == -1 and move_y == -1:
+        vec = [-1, 0]
+    elif move_x == 1 and move_y == -1:
+        vec = [0, -1]
+    elif move_x == 0 and move_y == 1:
+        vec = [1, 1]
+    elif move_x == 0 and move_y == -1:
+        vec = [-1, -1]
+    elif move_x == -1 and move_y == 0:
+        vec = [-1, 1]
+    elif move_x == 1 and move_y == 0:
+        vec = [1, -1]
+    else:
+        vec = [0, 0]
+    return vec
 # Pygame setup
 pygame.init()
 screen = pygame.display.set_mode((700, 700))
@@ -158,12 +231,14 @@ async def main():
     global v_1_x, v_1_y, v_2_x, v_2_y, player1_pos, player2_pos, start_time
     running = True
     while running:
+        move_x_1 = 0
+        move_x_2 = 0
+        move_y_1 = 0
+        move_y_2 = 0
+        current_time = pygame.time.get_ticks()
+        elapsed = current_time - start_time
         # --- physics update (replace your existing block with this) ---
         dt = clock.tick(FPS) / 1000.0  # seconds
-        ex_player1_pos = player1_pos.copy()
-        ex_player2_pos = player2_pos.copy()
-        ex_alfa = alfa
-        ex_beta = beta
 
         # convert degrees to radians once (used for force rotation)
         alfa_r = math.radians(alfa)
@@ -176,8 +251,10 @@ async def main():
         # player2 forward/back
         if keys[pygame.K_s]:
             f_qarsh_2 = -f_qarsh_2_paym
+            move_y_2 -= 1
         elif keys[pygame.K_w]:
             f_qarsh_2 = f_qarsh_2_paym
+            move_y_2 += 1
         else:
             f_qarsh_2 = 0
 
@@ -185,15 +262,19 @@ async def main():
         d_beta = 0.0
         if keys[pygame.K_a]:
             d_beta += 1.0
+            move_x_2 -= 1
         if keys[pygame.K_d]:
             d_beta -= 1.0
+            move_x_2 += 1
         beta += d_beta * turn_rate * dt
 
         # player1 forward/back
         if keys[pygame.K_k]:
             f_qarsh_1 = f_qarsh_1_paym
+            move_y_1 -= 1
         elif keys[pygame.K_i]:
             f_qarsh_1 = -f_qarsh_1_paym
+            move_y_1 += 1
         else:
             f_qarsh_1 = 0
 
@@ -201,8 +282,10 @@ async def main():
         d_alfa = 0.0
         if keys[pygame.K_j]:
             d_alfa += 1.0
+            move_x_1 -= 1
         if keys[pygame.K_l]:
             d_alfa -= 1.0
+            move_x_1 += 1
         alfa += d_alfa * turn_rate * dt
 
         v1 = pygame.Vector2(v_1_x, v_1_y)
@@ -236,13 +319,6 @@ async def main():
         player2_pos.x += v_2_x * dt
         player2_pos.y += v_2_y * dt
 
-        # keep these if other code expects them
-        f_lriv_1_x = f_total_1.x
-        f_lriv_1_y = f_total_1.y
-        f_lriv_2_x = f_total_2.x
-        f_lriv_2_y = f_total_2.y
-        a_1_x, a_1_y = a1_vec.x, a1_vec.y
-        a_2_x, a_2_y = a2_vec.x, a2_vec.y
         # --- end physics update ---
         
 
@@ -322,10 +398,6 @@ async def main():
             slop = 0.5               # penetration allowance in pixels (avoid jitter)
             eps = 1e-8
 
-            # Compute world-space contact point (approx)
-            # overlap_point is in p1_mask local coords (x,y) relative to p1_rect.topleft
-            contact_world = pygame.Vector2(p1_rect.left + overlap_point[0], p1_rect.top + overlap_point[1])
-
             # Compute collision normal: prefer center-to-center as stable approximation
             center_vec = pygame.Vector2(player2_pos.x - player1_pos.x, player2_pos.y - player1_pos.y)
             dist_centers = center_vec.length()
@@ -404,6 +476,21 @@ async def main():
             alfa = 0
             beta = 0
             v_1_x = v_1_y = v_2_x = v_2_y = 0  # Reset velocities
+            save(
+                p1_dat1_value,
+                p1_dat2_value,
+                p1_dat3_value,
+                p1_dat4_value,
+                p1_dat5_value,
+                p2_dat1_value,
+                p2_dat2_value,
+                p2_dat3_value,
+                p2_dat4_value,
+                p2_dat5_value,
+                klavish_1,
+                klavish_2,
+                2
+            )
         if dist_p2 > 72 * cm:
             score[1] += 1
             player1_pos = center.copy()
@@ -412,52 +499,48 @@ async def main():
             player2_pos.y -= d_f_c - 5 * cm
             alfa = 0
             beta = 0
-            v_1_x = v_1_y = v_2_x = v_2_y = 0  # Reset velocities
+            v_1_x = v_1_y = v_2_x = v_2_y = 0
+            save(
+                p1_dat1_value,
+                p1_dat2_value,
+                p1_dat3_value,
+                p1_dat4_value,
+                p1_dat5_value,
+                p2_dat1_value,
+                p2_dat2_value,
+                p2_dat3_value,
+                p2_dat4_value,
+                p2_dat5_value,
+                klavish_1,
+                klavish_2,
+                1
+            )  # Reset velocities
 
         # Sensor data collection
-        current_time = pygame.time.get_ticks()
-        elapsed = current_time - start_time
         if elapsed > 100:
-            #f_qarsh_1s.append(f_qarsh_1_vec.length())
-            #f_glorman_1s.append(f_glorman_1_vec.length())
-            #f_aki_deform_1s.append(f_aki_deform_1_vec.length())
-            #v_1_xs.append(v_1_x)
-            #v_1_ys.append(v_1_y)
-            
-            
-            f_tot.append(f_total_1.length())
+            klavish_1.append(convert(move_x_1,move_y_1))
+            klavish_2.append(convert(move_x_2,move_y_2))
             val = calculate_dat_value(p1_dat1, player2_pos, alfa_r, 1)
-            if val:
-                p1_dat1_value.append(val)
+            p1_dat1_value.append(val)
             val = calculate_dat_value(p1_dat2, player2_pos, alfa_r, 1)
-            if val:
-                p1_dat2_value.append(val)
+            p1_dat2_value.append(val)
             val = calculate_dat_value(p1_dat3, player2_pos, alfa_r, 1)
-            if val:
-                p1_dat3_value.append(val)
+            p1_dat3_value.append(val)
             val = calculate_dat_value(p1_dat4, player2_pos, alfa_r, 1)
-            if val:
-                p1_dat4_value.append(val)
+            p1_dat4_value.append(val)
             val = calculate_dat_value(p1_dat5, player2_pos, alfa_r, 1)
-            if val:
-                p1_dat5_value.append(val)
+            p1_dat5_value.append(val)
             val = calculate_dat_value(p2_dat1, player1_pos, beta_r, -1)
-            if val:
-                p2_dat1_value.append(abs(val))
+            p2_dat1_value.append(abs(val))
             val = calculate_dat_value(p2_dat2, player1_pos, beta_r, -1)
-            if val:
-                p2_dat2_value.append(abs(val))
+            p2_dat2_value.append(abs(val))
             val = calculate_dat_value(p2_dat3, player1_pos, beta_r, -1)
-            if val:
-                p2_dat3_value.append(abs(val))
+            p2_dat3_value.append(abs(val))
             val = calculate_dat_value(p2_dat4, player1_pos, beta_r, -1)
-            if val:
-                p2_dat4_value.append(abs(val))
+            p2_dat4_value.append(abs(val))
             val = calculate_dat_value(p2_dat5, player1_pos, beta_r, -1)
-            if val:
-                p2_dat5_value.append(abs(val))
+            p2_dat5_value.append(abs(val))
             start_time = current_time
-        f_lriv_1_ys.append(f_lriv_1_y)
         pygame.display.flip()
         await asyncio.sleep(1.0 / FPS)
 
@@ -472,14 +555,7 @@ async def main():
     #print(f"P2 dat3 : {p2_dat3_value}")
     #print(f"P2 dat4 : {p2_dat4_value}")
     #print(f"P2 dat5 : {p2_dat5_value}")
-    # print(f"f_qarsh_1 : {f_qarsh_1s}")
-    # print(f"f_glorman_1 : {f_glorman_1s}")
-    # print(f"f_aki_deform_1 : {f_aki_deform_1s}")
-    # print(f"v_1_x : {v_1_xs}")
-    # print(f"v_1_y : {v_1_ys}")
-    # print(f"a_1_x : {a_1_xs}")
-    # print(f"a_1_y : {a_1_ys}")
-    # print(f"total force : {f_tot}")
+    print(f"Klavish_1 : {klavish_1}")
 if platform.system() == "Emscripten":
     asyncio.ensure_future(main())
 else:
