@@ -7,7 +7,7 @@ from datetime import datetime
 import numpy as np
 import os
 # Constants
-cm = 4  # 4 pixels = 1 cm
+cm = 8  # 4 pixels = 1 cm
 mass_p1 = 0.5
 mass_p2 = 0.5
 v1_max = 100 * cm
@@ -171,15 +171,7 @@ def save(p1_dat1_value = None,
     )
     os.chdir(original_dir)
 def convert(move_x, move_y):
-    if move_x == -1 and move_y == 1:
-        vec = [0, 1]
-    elif move_x == 1 and move_y == 1:
-        vec = [1, 0]
-    elif move_x == -1 and move_y == -1:
-        vec = [-1, 0]
-    elif move_x == 1 and move_y == -1:
-        vec = [0, -1]
-    elif move_x == 0 and move_y == 1:
+    if move_x == 0 and move_y == 1:
         vec = [1, 1]
     elif move_x == 0 and move_y == -1:
         vec = [-1, -1]
@@ -199,7 +191,7 @@ FPS = 60
 center = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
 player1_pos = center.copy()
 player2_pos = center.copy()
-d_f_c = ((70 * cm) ** 2 - (50 * cm)) ** 0.5
+d_f_c = ((35 * cm) ** 2 - (15 * cm)) ** 0.5
 player1_pos.y += d_f_c - 5 * cm
 player2_pos.y -= d_f_c - 5 * cm
 score = [0, 0]
@@ -249,10 +241,10 @@ async def main():
         keys = pygame.key.get_pressed()
 
         # player2 forward/back
-        if keys[pygame.K_s]:
+        if keys[pygame.K_s] and (not keys[pygame.K_w]):
             f_qarsh_2 = -f_qarsh_2_paym
             move_y_2 -= 1
-        elif keys[pygame.K_w]:
+        elif keys[pygame.K_w] and (not keys[pygame.K_s]):
             f_qarsh_2 = f_qarsh_2_paym
             move_y_2 += 1
         else:
@@ -260,19 +252,19 @@ async def main():
 
         # player2 rotation (smoothed)
         d_beta = 0.0
-        if keys[pygame.K_a]:
+        if keys[pygame.K_a] and (not keys[pygame.K_d]) and (not keys[pygame.K_w]) and (not keys[pygame.K_s]):
             d_beta += 1.0
             move_x_2 -= 1
-        if keys[pygame.K_d]:
+        if keys[pygame.K_d] and (not keys[pygame.K_a]) and (not keys[pygame.K_w]) and (not keys[pygame.K_s]):
             d_beta -= 1.0
             move_x_2 += 1
         beta += d_beta * turn_rate * dt
 
         # player1 forward/back
-        if keys[pygame.K_k]:
+        if keys[pygame.K_k] and (not keys[pygame.K_i]):
             f_qarsh_1 = f_qarsh_1_paym
             move_y_1 -= 1
-        elif keys[pygame.K_i]:
+        elif keys[pygame.K_i] and (not keys[pygame.K_k]):
             f_qarsh_1 = -f_qarsh_1_paym
             move_y_1 += 1
         else:
@@ -280,10 +272,10 @@ async def main():
 
         # player1 rotation (smoothed)
         d_alfa = 0.0
-        if keys[pygame.K_j]:
+        if keys[pygame.K_j] and (not keys[pygame.K_l]) and (not keys[pygame.K_k]) and (not keys[pygame.K_i]):
             d_alfa += 1.0
             move_x_1 -= 1
-        if keys[pygame.K_l]:
+        if keys[pygame.K_l] and (not keys[pygame.K_j]) and (not keys[pygame.K_k]) and (not keys[pygame.K_i]):
             d_alfa -= 1.0
             move_x_1 += 1
         alfa += d_alfa * turn_rate * dt
@@ -360,9 +352,9 @@ async def main():
         
         # Drawing
         screen.fill("white")
-        pygame.draw.circle(screen, "yellow", center, 100 * cm)
-        pygame.draw.circle(screen, "white", center, 72 * cm)
-        pygame.draw.circle(screen, "black", center, 70 * cm)
+        pygame.draw.circle(screen, "yellow", center, 50 * cm)
+        pygame.draw.circle(screen, "white", center, 36 * cm)
+        pygame.draw.circle(screen, "black", center, 35 * cm)
         pygame.draw.circle(screen, "white", p1_dat1, 2)
         pygame.draw.circle(screen, "white", p1_dat2, 2)
         pygame.draw.circle(screen, "white", p1_dat3, 2)
@@ -467,7 +459,7 @@ async def main():
         # Scoring
         dist_p1 = player1_pos.distance_to(center)
         dist_p2 = player2_pos.distance_to(center)
-        if dist_p1 > 72 * cm:
+        if dist_p1 > 36 * cm:
             score[0] += 1
             player1_pos = center.copy()
             player2_pos = center.copy()
@@ -491,7 +483,8 @@ async def main():
                 klavish_2,
                 2
             )
-        if dist_p2 > 72 * cm:
+            print(f"Score {score[0]} : {score[1]}")
+        if dist_p2 > 36 * cm:
             score[1] += 1
             player1_pos = center.copy()
             player2_pos = center.copy()
@@ -515,7 +508,7 @@ async def main():
                 klavish_2,
                 1
             )  # Reset velocities
-
+            print(f"Score {score[0]} : {score[1]}")
         # Sensor data collection
         if elapsed > 100:
             klavish_1.append(convert(move_x_1,move_y_1))
@@ -555,7 +548,7 @@ async def main():
     #print(f"P2 dat3 : {p2_dat3_value}")
     #print(f"P2 dat4 : {p2_dat4_value}")
     #print(f"P2 dat5 : {p2_dat5_value}")
-    print(f"Klavish_1 : {klavish_1}")
+    #print(f"Klavish_1 : {klavish_1}")
 if platform.system() == "Emscripten":
     asyncio.ensure_future(main())
 else:
