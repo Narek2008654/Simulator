@@ -6,33 +6,24 @@ from math import sin, cos
 from datetime import datetime
 import numpy as np
 import os
-import tensorflow as tf
-from tensorflow.keras import layers, Input
-from tensorflow.keras.layers import Flatten
-
-# Recreate same architecture
-input_layer = Input(shape=(3, 1, 1))
-x = Flatten()(input_layer)
-x = layers.Dense(5, activation="relu")(x)
-x = layers.Dense(5, activation="relu")(x)
-output = layers.Dense(2, activation="tanh")(x)
-model = tf.keras.Model(inputs=input_layer, outputs=output)
-
-checkpoint_path = "checkpoints/cp.weights.h5"  # same path you used before
-
-# Load the saved weights
-model.load_weights(checkpoint_path)
-
-print("Weights loaded successfully!")
-
+from q_model import load_model
+# Load the saved model
+action_map = [
+    (1, -1), (1, 0), (1, 1),
+    (0, -1), (0, 0), (0, 1),
+    (-1, -1), (-1, 0), (-1, 1)
+]
+model = load_model("./model_savings/dqn_from_dataset.keras")
+print("Model loaded successfully!")
 # Constants
+
 cm = 8  # 4 pixels = 1 cm
-mass_p1 = 10
-mass_p2 = 10
+mass_p1 = 0.5
+mass_p2 = 0.5
 v1_max = 100 * cm
 v2_max = 100 * cm
-f_qarsh_1_paym = 5
-f_qarsh_2_paym = 5
+f_qarsh_1_paym = 20
+f_qarsh_2_paym = 20
 f_glorman_1_paym = 2
 f_glorman_2_paym = 2
 f_sahq_paym = 10
@@ -47,6 +38,7 @@ f_hrum = 0
 alfa_hrum = 0
 f_qarsh_2 = 0
 f_glorman_2 = 0
+p1_dat3_value = [0.0]
 f_aki_deform_1s = []
 f_glorman_1s = []
 f_qarsh_1s = []
@@ -240,16 +232,16 @@ v_1_y = 0
 v_2_y = 0
 start_time = pygame.time.get_ticks()
 
-p1_dat1_value = [40]
-p1_dat2_value = [40]
-p1_dat3_value = [40]
-p1_dat4_value = [40]
-p1_dat5_value = [40]
-p2_dat1_value = [40]
-p2_dat2_value = [40]
-p2_dat3_value = [40]
-p2_dat4_value = [40]
-p2_dat5_value = [40]
+p1_dat1_value = []
+p1_dat2_value = []
+p1_dat3_value = [0.0]
+p1_dat4_value = [0.0]
+p1_dat5_value = [0.0]
+p2_dat1_value = []
+p2_dat2_value = []
+p2_dat3_value = [0.0]
+p2_dat4_value = [0.0]
+p2_dat5_value = [0.0]
 f_lriv_1_ys = []
 a_1_xs = []
 a_1_ys = []
@@ -274,50 +266,49 @@ async def main():
         beta_r = math.radians(beta)
 
         # --- input (turn smoothing) ---
-        turn_rate = 90.0  # degrees/sec, tweak to taste
+        turn_rate = 180.0  # degrees/sec, tweak to taste
         keys = pygame.key.get_pressed()
 
-        ## player2 forward/back
-        #if keys[pygame.K_s] and (not keys[pygame.K_w]):
-        #    f_qarsh_2 = -f_qarsh_2_paym
-        #    move_y_2 -= 1
-        #elif keys[pygame.K_w] and (not keys[pygame.K_s]):
-        #    f_qarsh_2 = f_qarsh_2_paym
-        #    move_y_2 += 1
-        #else:
-        #    f_qarsh_2 = 0
-#
-        ## player2 rotation (smoothed)
-        #d_beta = 0.0
-        #if keys[pygame.K_a] and (not keys[pygame.K_d]) and (not keys[pygame.K_w]) and (not keys[pygame.K_s]):
-        #    d_beta += 1.0
-        #    move_x_2 -= 1
-        #if keys[pygame.K_d] and (not keys[pygame.K_a]) and (not keys[pygame.K_w]) and (not keys[pygame.K_s]):
-        #    d_beta -= 1.0
-        #    move_x_2 += 1
-        #beta += d_beta * turn_rate * dt
-        # Example: simple input vector for ML model
-      
-        # player1 forward/back
-        # if keys[pygame.K_k] and (not keys[pygame.K_i]):
-        #     f_qarsh_1 = f_qarsh_1_paym
-        #     move_y_1 -= 1
-        # elif keys[pygame.K_i] and (not keys[pygame.K_k]):
-        #     f_qarsh_1 = -f_qarsh_1_paym
-        #     move_y_1 += 1
-        # else:
-        #     f_qarsh_1 = 0
-# 
-        # # player1 rotation (smoothed)
-        # d_alfa = 0.0
-        # if keys[pygame.K_j] and (not keys[pygame.K_l]) and (not keys[pygame.K_k]) and (not keys[pygame.K_i]):
-        #     d_alfa += 1.0
-        #     move_x_1 -= 1
-        # if keys[pygame.K_l] and (not keys[pygame.K_j]) and (not keys[pygame.K_k]) and (not keys[pygame.K_i]):
-        #     d_alfa -= 1.0
-        #     move_x_1 += 1
-        # alfa += d_alfa * turn_rate * dt
+        # player2 forward/back
+        if keys[pygame.K_s] and (not keys[pygame.K_w]):
+            f_qarsh_2 = -f_qarsh_2_paym
+            move_y_2 -= 1
+        elif keys[pygame.K_w] and (not keys[pygame.K_s]):
+            f_qarsh_2 = f_qarsh_2_paym
+            move_y_2 += 1
+        else:
+            f_qarsh_2 = 0
 
+        # player2 rotation (smoothed)
+        d_beta = 0.0
+        if keys[pygame.K_a] and (not keys[pygame.K_d]) and (not keys[pygame.K_w]) and (not keys[pygame.K_s]):
+            d_beta += 1.0
+            move_x_2 -= 1
+        if keys[pygame.K_d] and (not keys[pygame.K_a]) and (not keys[pygame.K_w]) and (not keys[pygame.K_s]):
+            d_beta -= 1.0
+            move_x_2 += 1
+        beta += d_beta * turn_rate * dt
+#
+        ## player1 forward/back
+        #if keys[pygame.K_k] and (not keys[pygame.K_i]):
+        #    f_qarsh_1 = f_qarsh_1_paym
+        #    move_y_1 -= 1
+        #elif keys[pygame.K_i] and (not keys[pygame.K_k]):
+        #    f_qarsh_1 = -f_qarsh_1_paym
+        #    move_y_1 += 1
+        #else:
+        #    f_qarsh_1 = 0
+#
+        ## player1 rotation (smoothed)
+        #d_alfa = 0.0
+        #if keys[pygame.K_j] and (not keys[pygame.K_l]) and (not keys[pygame.K_k]) and (not keys[pygame.K_i]):
+        #    d_alfa += 1.0
+        #    move_x_1 -= 1
+        #if keys[pygame.K_l] and (not keys[pygame.K_j]) and (not keys[pygame.K_k]) and (not keys[pygame.K_i]):
+        #    d_alfa -= 1.0
+        #    move_x_1 += 1
+        #alfa += d_alfa * turn_rate * dt
+#
         v1 = pygame.Vector2(v_1_x, v_1_y)
         v2 = pygame.Vector2(v_2_x, v_2_y)
 
@@ -334,7 +325,7 @@ async def main():
             mass_p1, v1_max, dt
         )
         v_1_x, v_1_y = v1_new.x, v1_new.y
-        
+
         # --- update robot 2 ---
         v2_new, a2_vec, f_total_2 = update_robot_with_brake(
             v_2_x, v_2_y, f_qarsh_2_vec,
@@ -578,36 +569,38 @@ async def main():
         p1_dat3_value[-1] if p1_dat3_value else 0.0,
         p1_dat4_value[-1] if p1_dat4_value else 0.0,
         p1_dat5_value[-1] if p1_dat5_value else 0.0
-    ]], dtype='float32').reshape(1, 3, 1, 1)
+    ]], dtype='float32').reshape(-1,3)
 
         # model outputs two numbers in range [-1, 1] (like move_x, move_y)
         pred = model.predict(ml_input, verbose=0)
+        
         # ML model predicts forward as [1,1] (intended)
         # But in Pygame, +y is down -> subtract to go forward
-        move_1_1 = int(np.sign(pred[0,0]))
-        move_1_2 = int(np.sign(pred[0,1]))  # flip y-axis
-        move_x_1, move_y_1 = deconvert(move_1_1,move_1_2)
+        action_idx = np.argmax(pred[0])
+        print(action_idx)  # pick best action
+        move_x_1, move_y_1 = deconvert(*action_map[action_idx])
         f_qarsh_1 = -f_qarsh_1_paym * move_y_1
         
         alfa += -move_x_1 * turn_rate * dt
 
-        ml_input = np.array([
-    [
-        p2_dat3_value[-1] if p1_dat3_value else 0.0,
-        p2_dat4_value[-1] if p1_dat4_value else 0.0,
-        p2_dat5_value[-1] if p1_dat5_value else 0.0
-    ]], dtype='float32').reshape(1, 3, 1, 1)
-
-        # model outputs two numbers in range [-1, 1] (like move_x, move_y)
-        pred = model.predict(ml_input, verbose=0)
-        # ML model predicts forward as [1,1] (intended)
-        # But in Pygame, +y is down -> subtract to go forward
-        move_2_1 = int(np.sign(pred[0,0]))
-        move_2_2 = int(np.sign(pred[0,1]))  # flip y-axis
-        move_x_2, move_y_2 = deconvert(move_2_1,move_2_2)
-        f_qarsh_2 = f_qarsh_2_paym * move_y_2
+    #    ml_input = np.array([
+    #[
+    #    p2_dat3_value[-1] if p2_dat3_value else 0.0,
+    #    p2_dat4_value[-1] if p2_dat4_value else 0.0,
+    #    p2_dat5_value[-1] if p2_dat5_value else 0.0
+    #]], dtype='float32').reshape(-1,3)
+##
+    #    # model outputs two numbers in range [-1, 1] (like move_x, move_y)
+    #    pred = model.predict(ml_input, verbose=0)
+    #    # ML model predicts forward as [1,1] (intended)
+    #    # But in Pygame, +y is down -> subtract to go forward
+    #    action_idx = np.argmax(pred[0])
+    #    print(action_idx)  # pick best action
+    #    move_x_2, move_y_2 = deconvert(*action_map[action_idx])
+    #    f_qarsh_2 = -f_qarsh_2_paym * move_y_2
+    #    
+    #    beta += -move_x_2 * turn_rate * dt
         
-        beta += move_x_2 * turn_rate * dt
         pygame.display.flip()
         await asyncio.sleep(1.0 / FPS)
 
