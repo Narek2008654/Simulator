@@ -6,6 +6,7 @@ from math import sin, cos
 from datetime import datetime
 import numpy as np
 import os
+
 # Constants
 cm = 8  # 4 pixels = 1 cm
 mass_p1 = 0.5
@@ -218,6 +219,9 @@ a_1_xs = []
 a_1_ys = []
 f_tot = []
 
+pygame.font.init()
+font = pygame.font.Font(None, 48)
+
 async def main():
     global alfa, beta, f_qarsh_1, f_glorman_1, f_qarsh_2, f_glorman_2
     global v_1_x, v_1_y, v_2_x, v_2_y, player1_pos, player2_pos, start_time
@@ -352,8 +356,8 @@ async def main():
         
         # Drawing
         screen.fill("white")
-        pygame.draw.circle(screen, "yellow", center, 50 * cm)
-        pygame.draw.circle(screen, "white", center, 36 * cm)
+        pygame.draw.circle(screen, (100, 180, 100), center, 50 * cm)
+        pygame.draw.circle(screen, (220, 220, 220), center, 36 * cm)
         pygame.draw.circle(screen, "black", center, 35 * cm)
         pygame.draw.circle(screen, "white", p1_dat1, 2)
         pygame.draw.circle(screen, "white", p1_dat2, 2)
@@ -376,6 +380,30 @@ async def main():
         p2_rect = p2_rotated.get_rect(center=(player2_pos.x, player2_pos.y))
         screen.blit(p2_rotated, p2_rect)
 
+        p1_img = pygame.image.load("p2.jpg").convert_alpha()
+        p2_img = pygame.image.load("p1.jpg").convert_alpha()
+        p1_img = pygame.transform.scale(p1_img, (10 * cm, 10 * cm))
+        p2_img = pygame.transform.scale(p2_img, (10 * cm, 10 * cm))
+        p1_rotated = pygame.transform.rotate(p1_img, alfa)
+        p1_rect = p1_rotated.get_rect(center=(player1_pos.x, player1_pos.y))
+        screen.blit(p1_rotated, p1_rect)
+        p2_rotated = pygame.transform.rotate(p2_img, beta)
+        p2_rect = p2_rotated.get_rect(center=(player2_pos.x, player2_pos.y))
+        screen.blit(p2_rotated, p2_rect)
+        
+        score_text1 = f"Black: {score[0]}"
+        text_surface1 = font.render(score_text1, True, (255, 255, 255))
+        score_text2 = f"White: {score[1]}"
+        text_surface2 = font.render(score_text2, True, (255, 255, 255))
+        
+        padding = 5
+        rect_width = max(text_surface1.get_width(), text_surface2.get_width()) + 2 * padding
+        rect_height = text_surface1.get_height() + text_surface2.get_height() + 3 * padding
+        rect_x, rect_y = 5, 5
+        pygame.draw.rect(screen, (0, 0, 0), (rect_x, rect_y, rect_width, rect_height))
+        screen.blit(text_surface1, (rect_x + padding, rect_y + padding))
+        screen.blit(text_surface2, (rect_x + padding, rect_y + padding + text_surface1.get_height() + padding))
+
         # Collision detection with bounce
         # --- Collision detection & impulse resolution (replace your simple bounce block) ---
         p1_mask = pygame.mask.from_surface(p1_rotated)
@@ -384,85 +412,65 @@ async def main():
         overlap_point = p1_mask.overlap(p2_mask, offset)  # returns local coords in p1_mask or None
 
         if overlap_point:
-            # Tuning params
-            restitution = 0.3       # bounciness: 0.0 = inelastic, 1.0 = fully elastic (tweak)
-            positional_percent = 0.2  # percent of penetration to correct (0.2 is typical)
-            slop = 0.5               # penetration allowance in pixels (avoid jitter)
+            # Parameters
+            restitution = 0.3          # How bouncy
+            slop = 0.01                # much smaller slop
+            penetration_correction = 1.5   # push apart more aggressively
             eps = 1e-8
+            
+            # Center-to-center vector
+            delta = pygame.Vector2(player2_pos.x - player1_pos.x, player2_pos.y - player1_pos.y)
+            dist = delta.length()
 
-            # Compute collision normal: prefer center-to-center as stable approximation
-            center_vec = pygame.Vector2(player2_pos.x - player1_pos.x, player2_pos.y - player1_pos.y)
-            dist_centers = center_vec.length()
-            if dist_centers > eps:
-                normal = center_vec.normalize()
+            # Avoid divide by zero
+            if dist < eps:
+                normal = pygame.Vector2(1, 0)
+                dist = 1.0
             else:
-                # fallback: try using difference of rotations (rare)
-                ang_diff = math.radians(beta - alfa)
-                normal = pygame.Vector2(math.sin(ang_diff), math.cos(ang_diff))
-                if normal.length() < eps:
-                    normal = pygame.Vector2(0, -1)  # ultimate fallback
+                normal = delta.normalize()
 
-            # Relative velocity at centers (you don't model angular velocity)
-            v1 = pygame.Vector2(v_1_x, v_1_y)
-            v2 = pygame.Vector2(v_2_x, v_2_y)
-            rel_vel = v2 - v1
-
-            # Velocity along normal
+            # Relative velocity
+            rel_vel = pygame.Vector2(v_2_x - v_1_x, v_2_y - v_1_y)
             vel_along_normal = rel_vel.dot(normal)
 
-            # If velocities are separating, do nothing
+            # Apply impulse only if moving towards each other
             if vel_along_normal < 0:
-                inv_m1 = 1.0 / mass_p1 if mass_p1 > eps else 0.0
-                inv_m2 = 1.0 / mass_p2 if mass_p2 > eps else 0.0
+                inv_m1 = 1.0 / mass_p1
+                inv_m2 = 1.0 / mass_p2
+                j = -(1 + restitution) * vel_along_normal / (inv_m1 + inv_m2)
+                impulse = normal * j
 
-                # impulse scalar (1D collision along normal)
-                j = -(1 + restitution) * vel_along_normal
-                denom = inv_m1 + inv_m2
-                if denom > eps:
-                    j /= denom
+                v_1_x -= impulse.x * inv_m1
+                v_1_y -= impulse.y * inv_m1
+                v_2_x += impulse.x * inv_m2
+                v_2_y += impulse.y * inv_m2
 
-                    impulse = normal * j
+            # Positional correction (harder)
+            p1_size = max(p1_mask.get_size()) / 2
+            p2_size = max(p2_mask.get_size()) / 2
+            penetration = max(0.0, (p1_size + p2_size) - dist)
 
-                    # apply impulses (change linear velocities)
-                    v_1_x -= (impulse.x * inv_m1)
-                    v_1_y -= (impulse.y * inv_m1)
-                    v_2_x += (impulse.x * inv_m2)
-                    v_2_y += (impulse.y * inv_m2)
-
-            # Positional correction to avoid sinking/overlap:
-            # approximate penetration using square-to-circle conservative radii (robots are 10*cm squares)
-            side = 10 * cm
-            # radius of circumscribed circle for square: half-diagonal = side / sqrt(2)
-            r = side / (2 ** 0.5)
-            sum_r = r + r
-            # distance between centers (recompute robustly)
-            dist = player1_pos.distance_to(player2_pos)
-            penetration = max(0.0, sum_r - dist)
-
-            if penetration > slop and (inv_m1 + inv_m2) > eps:
-                correction_magnitude = (max(penetration - slop, 0.0) / (inv_m1 + inv_m2)) * positional_percent
-                correction = normal * correction_magnitude
-                # move objects apart proportionally to their inverse masses
+            if penetration > slop:
+                inv_m1 = 1.0 / mass_p1
+                inv_m2 = 1.0 / mass_p2
+                correction = normal * penetration_correction * (penetration - slop) / (inv_m1 + inv_m2)
                 player1_pos -= correction * inv_m1
                 player2_pos += correction * inv_m2
 
-            # Optional: reduce velocities a bit to simulate energy loss / friction on contact
-            contact_damping = 0.98
-            v_1_x *= contact_damping
-            v_1_y *= contact_damping
-            v_2_x *= contact_damping
-            v_2_y *= contact_damping
-
-            # (Optional) You can show the contact point for debugging:
-            # pygame.draw.circle(screen, "blue", contact_world, 3)
+            # Extra push if too deep
+            if dist < 1e-4:
+                player1_pos -= normal * 0.1
+                player2_pos += normal * 0.1
 
         # Scoring
         dist_p1 = player1_pos.distance_to(center)
         dist_p2 = player2_pos.distance_to(center)
+        
         if dist_p1 > 36 * cm:
             score[0] += 1
             player1_pos = center.copy()
             player2_pos = center.copy()
+            
             player1_pos.y += d_f_c - 5 * cm
             player2_pos.y -= d_f_c - 5 * cm
             alfa = 0
@@ -483,11 +491,18 @@ async def main():
                 klavish_2,
                 2
             )
+            
+            # pygame.mixer.init()
+            # pygame.mixer.music.load("audio1.mp3") 
+            # pygame.mixer.music.play()
+                
             print(f"Score {score[0]} : {score[1]}")
-        if dist_p2 > 36 * cm:
+
+        elif dist_p2 > 36 * cm:
             score[1] += 1
             player1_pos = center.copy()
             player2_pos = center.copy()
+            
             player1_pos.y += d_f_c - 5 * cm
             player2_pos.y -= d_f_c - 5 * cm
             alfa = 0
@@ -508,7 +523,13 @@ async def main():
                 klavish_2,
                 1
             )  # Reset velocities
+            
+            # pygame.mixer.init()
+            # pygame.mixer.music.load("audio2.mp3") 
+            # pygame.mixer.music.play()
+            
             print(f"Score {score[0]} : {score[1]}")
+            
         # Sensor data collection
         if elapsed > 100:
             klavish_1.append(convert(move_x_1,move_y_1))
