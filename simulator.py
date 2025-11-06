@@ -6,24 +6,29 @@ from math import sin, cos
 from datetime import datetime
 import numpy as np
 import os
-from q_model import load_model
+import tensorflow as tf
+
+def load_model(path):
+    return tf.keras.models.load_model(path)
+
 # Load the saved model
 action_map = [
     (1, -1), (1, 0), (1, 1),
     (0, -1), (0, 0), (0, 1),
-    (-1, -1), (-1, 0), (-1, 1)
+    (0, 0), (-1, 0), (-1, 1)
 ]
-model = load_model("./model_savings/dqn_from_dataset.keras")
+# (-1, -1) isn't necessary
+model = load_model("model_savings/dqn_from_dataset.keras")
 print("Model loaded successfully!")
 # Constants
 
 cm = 8  # 4 pixels = 1 cm
 mass_p1 = 0.5
 mass_p2 = 0.5
-v1_max = 100 * cm
-v2_max = 100 * cm
-f_qarsh_1_paym = 20
-f_qarsh_2_paym = 20
+v1_max = 18 * cm
+v2_max = 18 * cm
+f_qarsh_1_paym = 10
+f_qarsh_2_paym = 10
 f_glorman_1_paym = 2
 f_glorman_2_paym = 2
 f_sahq_paym = 10
@@ -225,13 +230,13 @@ player1_pos.y += d_f_c - 5 * cm
 player2_pos.y -= d_f_c - 5 * cm
 score = [0, 0]
 alfa = 0
-beta = 0
+beta = 30
 v_1_x = 0
 v_2_x = 0
 v_1_y = 0
 v_2_y = 0
 start_time = pygame.time.get_ticks()
-
+start_time2 = pygame.time.get_ticks()
 p1_dat1_value = []
 p1_dat2_value = []
 p1_dat3_value = [0.0]
@@ -247,9 +252,12 @@ a_1_xs = []
 a_1_ys = []
 f_tot = []
 
+pygame.font.init()
+font = pygame.font.Font(None, 48)
+
 async def main():
     global alfa, beta, f_qarsh_1, f_glorman_1, f_qarsh_2, f_glorman_2
-    global v_1_x, v_1_y, v_2_x, v_2_y, player1_pos, player2_pos, start_time
+    global v_1_x, v_1_y, v_2_x, v_2_y, player1_pos, player2_pos, start_time,start_time2
     running = True
     while running:
         move_x_1 = 0
@@ -258,6 +266,7 @@ async def main():
         move_y_2 = 0
         current_time = pygame.time.get_ticks()
         elapsed = current_time - start_time
+        elapsed2 = current_time - start_time2
         # --- physics update (replace your existing block with this) ---
         dt = clock.tick(FPS) / 1000.0  # seconds
 
@@ -269,46 +278,46 @@ async def main():
         turn_rate = 180.0  # degrees/sec, tweak to taste
         keys = pygame.key.get_pressed()
 
-        # player2 forward/back
-        if keys[pygame.K_s] and (not keys[pygame.K_w]):
-            f_qarsh_2 = -f_qarsh_2_paym
-            move_y_2 -= 1
-        elif keys[pygame.K_w] and (not keys[pygame.K_s]):
-            f_qarsh_2 = f_qarsh_2_paym
-            move_y_2 += 1
-        else:
-            f_qarsh_2 = 0
+        # # player2 forward/back
+        # if keys[pygame.K_s] and (not keys[pygame.K_w]):
+        #     f_qarsh_2 = -f_qarsh_2_paym
+        #     move_y_2 -= 1
+        # elif keys[pygame.K_w] and (not keys[pygame.K_s]):
+        #     f_qarsh_2 = f_qarsh_2_paym
+        #     move_y_2 += 1
+        # else:
+        #     f_qarsh_2 = 0
 
-        # player2 rotation (smoothed)
-        d_beta = 0.0
+        # # player2 rotation (smoothed)
+        # d_beta = 0.0
+        # if keys[pygame.K_a] and (not keys[pygame.K_d]) and (not keys[pygame.K_w]) and (not keys[pygame.K_s]):
+        #     d_beta += 1.0
+        #     move_x_2 -= 1
+        # if keys[pygame.K_d] and (not keys[pygame.K_a]) and (not keys[pygame.K_w]) and (not keys[pygame.K_s]):
+        #     d_beta -= 1.0
+        #     move_x_2 += 1
+        # beta += d_beta * turn_rate * dt
+#
+        # player1 forward/back
+        if keys[pygame.K_s] and (not keys[pygame.K_w]):
+           f_qarsh_1 = f_qarsh_1_paym
+           move_y_1 -= 1
+        elif keys[pygame.K_w] and (not keys[pygame.K_s]):
+           f_qarsh_1 = -f_qarsh_1_paym
+           move_y_1 += 1
+        else:
+           f_qarsh_1 = 0
+
+        # player1 rotation (smoothed)
+        d_alfa = 0.0
         if keys[pygame.K_a] and (not keys[pygame.K_d]) and (not keys[pygame.K_w]) and (not keys[pygame.K_s]):
-            d_beta += 1.0
-            move_x_2 -= 1
+           d_alfa += 1.0
+           move_x_1 -= 1
         if keys[pygame.K_d] and (not keys[pygame.K_a]) and (not keys[pygame.K_w]) and (not keys[pygame.K_s]):
-            d_beta -= 1.0
-            move_x_2 += 1
-        beta += d_beta * turn_rate * dt
-#
-        ## player1 forward/back
-        #if keys[pygame.K_k] and (not keys[pygame.K_i]):
-        #    f_qarsh_1 = f_qarsh_1_paym
-        #    move_y_1 -= 1
-        #elif keys[pygame.K_i] and (not keys[pygame.K_k]):
-        #    f_qarsh_1 = -f_qarsh_1_paym
-        #    move_y_1 += 1
-        #else:
-        #    f_qarsh_1 = 0
-#
-        ## player1 rotation (smoothed)
-        #d_alfa = 0.0
-        #if keys[pygame.K_j] and (not keys[pygame.K_l]) and (not keys[pygame.K_k]) and (not keys[pygame.K_i]):
-        #    d_alfa += 1.0
-        #    move_x_1 -= 1
-        #if keys[pygame.K_l] and (not keys[pygame.K_j]) and (not keys[pygame.K_k]) and (not keys[pygame.K_i]):
-        #    d_alfa -= 1.0
-        #    move_x_1 += 1
-        #alfa += d_alfa * turn_rate * dt
-#
+           d_alfa -= 1.0
+           move_x_1 += 1
+        alfa += d_alfa * turn_rate * dt
+
         v1 = pygame.Vector2(v_1_x, v_1_y)
         v2 = pygame.Vector2(v_2_x, v_2_y)
 
@@ -381,8 +390,8 @@ async def main():
         
         # Drawing
         screen.fill("white")
-        pygame.draw.circle(screen, "yellow", center, 50 * cm)
-        pygame.draw.circle(screen, "white", center, 36 * cm)
+        pygame.draw.circle(screen, (100, 180, 100), center, 50 * cm)
+        pygame.draw.circle(screen, (220, 220, 220), center, 36 * cm)
         pygame.draw.circle(screen, "black", center, 35 * cm)
         pygame.draw.circle(screen, "white", p1_dat1, 2)
         pygame.draw.circle(screen, "white", p1_dat2, 2)
@@ -394,16 +403,41 @@ async def main():
         pygame.draw.circle(screen, "white", p2_dat3, 2)
         pygame.draw.circle(screen, "white", p2_dat4, 2)
         pygame.draw.circle(screen, "white", p2_dat5, 2)
-        p1_surf = pygame.Surface((10 * cm, 10 * cm), pygame.SRCALPHA)
-        pygame.draw.rect(p1_surf, "green", (0, 0, 10 * cm, 10 * cm))
-        p1_rotated = pygame.transform.rotate(p1_surf, alfa)
+        
+        # p1_surf = pygame.Surface((10 * cm, 10 * cm), pygame.SRCALPHA)
+        # pygame.draw.rect(p1_surf, "green", (0, 0, 10 * cm, 10 * cm))
+        # p1_rotated = pygame.transform.rotate(p1_surf, alfa)
+        # p1_rect = p1_rotated.get_rect(center=(player1_pos.x, player1_pos.y))
+        # screen.blit(p1_rotated, p1_rect)
+        # p2_surf = pygame.Surface((10 * cm, 10 * cm), pygame.SRCALPHA)
+        # pygame.draw.rect(p2_surf, "red", (0, 0, 10 * cm, 10 * cm))
+        # p2_rotated = pygame.transform.rotate(p2_surf, beta)
+        # p2_rect = p2_rotated.get_rect(center=(player2_pos.x, player2_pos.y))
+        # screen.blit(p2_rotated, p2_rect)
+        
+        p1_img = pygame.image.load("p2.jpg").convert_alpha()
+        p2_img = pygame.image.load("p1.jpg").convert_alpha()
+        p1_img = pygame.transform.scale(p1_img, (10 * cm, 10 * cm))
+        p2_img = pygame.transform.scale(p2_img, (10 * cm, 10 * cm))
+        p1_rotated = pygame.transform.rotate(p1_img, alfa)
         p1_rect = p1_rotated.get_rect(center=(player1_pos.x, player1_pos.y))
         screen.blit(p1_rotated, p1_rect)
-        p2_surf = pygame.Surface((10 * cm, 10 * cm), pygame.SRCALPHA)
-        pygame.draw.rect(p2_surf, "red", (0, 0, 10 * cm, 10 * cm))
-        p2_rotated = pygame.transform.rotate(p2_surf, beta)
+        p2_rotated = pygame.transform.rotate(p2_img, beta)
         p2_rect = p2_rotated.get_rect(center=(player2_pos.x, player2_pos.y))
         screen.blit(p2_rotated, p2_rect)
+        
+        score_text1 = f"Player1: {score[0]}"
+        text_surface1 = font.render(score_text1, True, (255, 255, 255))
+        score_text2 = f"Player2: {score[1]}"
+        text_surface2 = font.render(score_text2, True, (255, 255, 255))
+        
+        padding = 5
+        rect_width = max(text_surface1.get_width(), text_surface2.get_width()) + 2 * padding
+        rect_height = text_surface1.get_height() + text_surface2.get_height() + 3 * padding
+        rect_x, rect_y = 5, 5
+        pygame.draw.rect(screen, (0, 0, 0), (rect_x, rect_y, rect_width, rect_height))
+        screen.blit(text_surface1, (rect_x + padding, rect_y + padding))
+        screen.blit(text_surface2, (rect_x + padding, rect_y + padding + text_surface1.get_height() + padding))
 
         # Collision detection with bounce
         # --- Collision detection & impulse resolution (replace your simple bounce block) ---
@@ -413,77 +447,55 @@ async def main():
         overlap_point = p1_mask.overlap(p2_mask, offset)  # returns local coords in p1_mask or None
 
         if overlap_point:
-            # Tuning params
-            restitution = 0.3       # bounciness: 0.0 = inelastic, 1.0 = fully elastic (tweak)
-            positional_percent = 0.2  # percent of penetration to correct (0.2 is typical)
-            slop = 0.5               # penetration allowance in pixels (avoid jitter)
+            # Parameters
+            restitution = 0.3          # How bouncy
+            slop = 0.01                # much smaller slop
+            penetration_correction = 1.5   # push apart more aggressively
             eps = 1e-8
+            
+            # Center-to-center vector
+            delta = pygame.Vector2(player2_pos.x - player1_pos.x, player2_pos.y - player1_pos.y)
+            dist = delta.length()
 
-            # Compute collision normal: prefer center-to-center as stable approximation
-            center_vec = pygame.Vector2(player2_pos.x - player1_pos.x, player2_pos.y - player1_pos.y)
-            dist_centers = center_vec.length()
-            if dist_centers > eps:
-                normal = center_vec.normalize()
+            # Avoid divide by zero
+            if dist < eps:
+                normal = pygame.Vector2(1, 0)
+                dist = 1.0
             else:
-                # fallback: try using difference of rotations (rare)
-                ang_diff = math.radians(beta - alfa)
-                normal = pygame.Vector2(math.sin(ang_diff), math.cos(ang_diff))
-                if normal.length() < eps:
-                    normal = pygame.Vector2(0, -1)  # ultimate fallback
+                normal = delta.normalize()
 
-            # Relative velocity at centers (you don't model angular velocity)
-            v1 = pygame.Vector2(v_1_x, v_1_y)
-            v2 = pygame.Vector2(v_2_x, v_2_y)
-            rel_vel = v2 - v1
-
-            # Velocity along normal
+            # Relative velocity
+            rel_vel = pygame.Vector2(v_2_x - v_1_x, v_2_y - v_1_y)
             vel_along_normal = rel_vel.dot(normal)
 
-            # If velocities are separating, do nothing
+            # Apply impulse only if moving towards each other
             if vel_along_normal < 0:
-                inv_m1 = 1.0 / mass_p1 if mass_p1 > eps else 0.0
-                inv_m2 = 1.0 / mass_p2 if mass_p2 > eps else 0.0
+                inv_m1 = 1.0 / mass_p1
+                inv_m2 = 1.0 / mass_p2
+                j = -(1 + restitution) * vel_along_normal / (inv_m1 + inv_m2)
+                impulse = normal * j
 
-                # impulse scalar (1D collision along normal)
-                j = -(1 + restitution) * vel_along_normal
-                denom = inv_m1 + inv_m2
-                if denom > eps:
-                    j /= denom
+                v_1_x -= impulse.x * inv_m1
+                v_1_y -= impulse.y * inv_m1
+                v_2_x += impulse.x * inv_m2
+                v_2_y += impulse.y * inv_m2
 
-                    impulse = normal * j
+            # Positional correction (harder)
+            p1_size = max(p1_mask.get_size()) / 2
+            p2_size = max(p2_mask.get_size()) / 2
+            penetration = max(0.0, (p1_size + p2_size) - dist)
 
-                    # apply impulses (change linear velocities)
-                    v_1_x -= (impulse.x * inv_m1)
-                    v_1_y -= (impulse.y * inv_m1)
-                    v_2_x += (impulse.x * inv_m2)
-                    v_2_y += (impulse.y * inv_m2)
-
-            # Positional correction to avoid sinking/overlap:
-            # approximate penetration using square-to-circle conservative radii (robots are 10*cm squares)
-            side = 10 * cm
-            # radius of circumscribed circle for square: half-diagonal = side / sqrt(2)
-            r = side / (2 ** 0.5)
-            sum_r = r + r
-            # distance between centers (recompute robustly)
-            dist = player1_pos.distance_to(player2_pos)
-            penetration = max(0.0, sum_r - dist)
-
-            if penetration > slop and (inv_m1 + inv_m2) > eps:
-                correction_magnitude = (max(penetration - slop, 0.0) / (inv_m1 + inv_m2)) * positional_percent
-                correction = normal * correction_magnitude
-                # move objects apart proportionally to their inverse masses
+            if penetration > slop:
+                inv_m1 = 1.0 / mass_p1
+                inv_m2 = 1.0 / mass_p2
+                correction = normal * penetration_correction * (penetration - slop) / (inv_m1 + inv_m2)
                 player1_pos -= correction * inv_m1
                 player2_pos += correction * inv_m2
 
-            # Optional: reduce velocities a bit to simulate energy loss / friction on contact
-            contact_damping = 0.98
-            v_1_x *= contact_damping
-            v_1_y *= contact_damping
-            v_2_x *= contact_damping
-            v_2_y *= contact_damping
-
-            # (Optional) You can show the contact point for debugging:
-            # pygame.draw.circle(screen, "blue", contact_world, 3)
+            # Extra push if too deep
+            if dist < 1e-4:
+                player1_pos -= normal * 0.1
+                player2_pos += normal * 0.1
 
         # Scoring
         dist_p1 = player1_pos.distance_to(center)
@@ -492,11 +504,13 @@ async def main():
             score[0] += 1
             player1_pos = center.copy()
             player2_pos = center.copy()
+                        
             player1_pos.y += d_f_c - 5 * cm
             player2_pos.y -= d_f_c - 5 * cm
             alfa = 0
-            beta = 0
+            beta = 30
             v_1_x = v_1_y = v_2_x = v_2_y = 0  # Reset velocities
+            start_time2 = pygame.time.get_ticks()
             #save(
             #    p1_dat1_value,
             #    p1_dat2_value,
@@ -512,16 +526,23 @@ async def main():
             #    klavish_2,
             #    2
             #)
+            
+            #pygame.mixer.init()
+            #pygame.mixer.music.load("audio1.mp3") 
+            #pygame.mixer.music.play()
+            
             print(f"Score {score[0]} : {score[1]}")
-        if dist_p2 > 36 * cm:
+        elif dist_p2 > 36 * cm:
             score[1] += 1
             player1_pos = center.copy()
             player2_pos = center.copy()
+            
             player1_pos.y += d_f_c - 5 * cm
             player2_pos.y -= d_f_c - 5 * cm
             alfa = 0
-            beta = 0
+            beta = 30
             v_1_x = v_1_y = v_2_x = v_2_y = 0
+            start_time2 = pygame.time.get_ticks()
             #save(
             #    p1_dat1_value,
             #    p1_dat2_value,
@@ -537,6 +558,10 @@ async def main():
             #    klavish_2,
             #    1
             #)  # Reset velocities
+            #pygame.mixer.init()
+            #pygame.mixer.music.load("audio2.mp3") 
+            #pygame.mixer.music.play()
+
             print(f"Score {score[0]} : {score[1]}")
         # Sensor data collection
         if elapsed > 10:
@@ -563,25 +588,26 @@ async def main():
             val = calculate_dat_value(p2_dat5, player1_pos, beta_r, -1)
             p2_dat5_value[0] = (abs(val))
             start_time = current_time
-        
-        ml_input = np.array([
-    [
-        p1_dat3_value[-1] if p1_dat3_value else 0.0,
-        p1_dat4_value[-1] if p1_dat4_value else 0.0,
-        p1_dat5_value[-1] if p1_dat5_value else 0.0
-    ]], dtype='float32').reshape(-1,3)
-
-        # model outputs two numbers in range [-1, 1] (like move_x, move_y)
-        pred = model.predict(ml_input, verbose=0)
-        
-        # ML model predicts forward as [1,1] (intended)
-        # But in Pygame, +y is down -> subtract to go forward
-        action_idx = np.argmax(pred[0])
-        print(action_idx)  # pick best action
-        move_x_1, move_y_1 = deconvert(*action_map[action_idx])
-        f_qarsh_1 = -f_qarsh_1_paym * move_y_1
-        
-        alfa += -move_x_1 * turn_rate * dt
+        if elapsed2<=1500:
+            f_qarsh_2 = f_qarsh_2_paym
+        else:
+            ml_input = np.array([[
+                p2_dat3_value[-1] if p2_dat3_value else 0.0,
+                p2_dat4_value[-1] if p2_dat4_value else 0.0,
+                p2_dat5_value[-1] if p2_dat5_value else 0.0
+            ]], dtype='float32').reshape(-1,3)
+             
+            # model outputs two numbers in range [-1, 1] (like move_x, move_y)
+            pred = model.predict(ml_input, verbose=0)
+            # ML model predicts forward as [1,1] (intended)
+            # But in Pygame, +y is down -> subtract to go forward
+            action_idx = np.argmax(pred[0])
+            # print(action_idx)
+            # print(action_map[action_idx])
+            move_x_2, move_y_2 = deconvert(*action_map[action_idx])
+            f_qarsh_2 = f_qarsh_2_paym * move_y_2
+            beta += -move_x_2 * turn_rate * dt
+       
 
     #    ml_input = np.array([
     #[
