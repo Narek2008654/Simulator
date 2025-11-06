@@ -166,7 +166,7 @@ def load_model(path):
 # Example usage (edit to your filenames / arrays):
 if __name__ == "__main__":
     # Load dataset
-    states, actions, rewards, next_states, dones = load_winners_dataset("Alex_data")
+    states, actions, rewards, next_states, dones = load_winners_dataset("data")
     
     # Convert raw motor-pair actions to indices
     actions = np.array([encode_action(a) for a in actions], dtype=np.int32)
@@ -181,7 +181,7 @@ if __name__ == "__main__":
     
     # Build Q-model
     example_state_shape = (3,)  # because you reduced 5 → 3 sensors
-    if "./model_savings/dqn_from_dataset.keras":
+    if os.path.exists("./model_savings/dqn_from_dataset.keras"):
         q_model = load_model("./model_savings/dqn_from_dataset.keras")
         target_q = load_model("./model_savings/dqn_from_dataset.keras")
         target_q.set_weights(q_model.get_weights())
